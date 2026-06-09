@@ -187,8 +187,9 @@
         <canvas id="canvas" width="1320" height="400"></canvas>
       </div>
       <div class="row" style="margin-top:16px;">
-        <button class="btn-primary" id="downloadBtn">Download PNG</button>
+        <button class="btn-primary" id="downloadBtn">Save image</button>
       </div>
+      <p class="hint">On iPhone this opens the share sheet — tap <strong>Save Image</strong> to add it to Photos. You can also long-press the preview above and choose <strong>Save to Photos</strong>.</p>
     </div>
   </div>
 
@@ -355,12 +356,36 @@
     if (dt && dt.files && dt.files[0]) loadFile(dt.files[0]);
   });
 
-  downloadBtn.addEventListener("click", function () {
-    var name = (nameInput.value.trim() || "user").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  function fileBaseName() {
+    return (nameInput.value.trim() || "user").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  }
+
+  // Plain-download fallback (desktop, and browsers without share support)
+  function downloadPng() {
     var link = document.createElement("a");
-    link.download = name + "-deactivated.png";
+    link.download = fileBaseName() + "-deactivated.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
+  }
+
+  downloadBtn.addEventListener("click", function () {
+    var filename = fileBaseName() + "-deactivated.png";
+
+    // On iPhone/iPad the share sheet is the only reliable path to Photos.
+    if (canvas.toBlob && navigator.canShare) {
+      canvas.toBlob(function (blob) {
+        if (!blob) { downloadPng(); return; }
+        var file = new File([blob], filename, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: filename })
+            .catch(function () { /* user cancelled — do nothing */ });
+        } else {
+          downloadPng();
+        }
+      }, "image/png");
+    } else {
+      downloadPng();
+    }
   });
 
   // Initial paint
