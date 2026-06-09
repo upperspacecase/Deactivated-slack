@@ -161,7 +161,13 @@
     border: 1px solid var(--accent);
     border-radius: 10px;
     padding: 16px 18px;
-    margin-bottom: 16px;
+    margin-top: 16px;
+  }
+
+  /* Dotted green frame so it's obvious this is the output to save */
+  .previewBox.output {
+    border: 3px dashed #2eb67d;
+    padding: 6px;
   }
   .instructions-step {
     font-size: 17px;
@@ -205,12 +211,12 @@
     <canvas id="canvas" width="1320" height="400" style="display:none;"></canvas>
 
     <div class="card" id="resultCard" style="display:none;">
-      <div class="instructions">
-        <div class="instructions-step">📲 <strong>To save on your phone:</strong> press and hold the image below, then tap <strong>“Save to Photos.”</strong></div>
-        <div class="instructions-step">💻 <strong>On a computer:</strong> right-click the image and choose <strong>“Save image as…”</strong></div>
-      </div>
-      <div class="previewBox">
+      <div class="previewBox output">
         <img id="resultImg" alt="Generated deactivated name tag" />
+      </div>
+      <div class="instructions">
+        <div class="instructions-step">📲 <strong>To save on your phone:</strong> press and hold the image above, then tap <strong>“Save to Photos.”</strong></div>
+        <div class="instructions-step">💻 <strong>On a computer:</strong> right-click the image and choose <strong>“Save image as…”</strong></div>
       </div>
     </div>
   </div>
