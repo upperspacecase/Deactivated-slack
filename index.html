@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Slack "Deactivated" Image Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* Slack dark theme tokens */
+    --slack-bg: #1a1d21;
+    --slack-name: #ababad;   /* muted gray used for deactivated members */
+    --panel: #222529;
+    --panel-2: #2c2f33;
+    --border: #3a3d42;
+    --accent: #1264a3;
+    --accent-hover: #0b4b82;
+    --text: #d1d2d3;
+    --text-dim: #9a9b9e;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #15171a;
+    color: var(--text);
+    font-family: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+  }
+
+  h1 {
+    font-weight: 900;
+    font-size: 26px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .sub {
+    color: var(--text-dim);
+    font-size: 15px;
+    margin: 0 0 28px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  label {
+    display: block;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 16px;
+    padding: 11px 12px;
+    font-family: inherit;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 26px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .drop:hover, .drop.drag {
+    border-color: var(--accent);
+    background: rgba(18,100,163,0.08);
+    color: var(--text);
+  }
+  .drop strong { color: var(--text); }
+  .drop input { display: none; }
+
+  .thumb {
+    margin-top: 12px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .thumb img {
+    width: 44px; height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  button {
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:not(:disabled):hover { background: var(--accent-hover); }
+  .btn-ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:not(:disabled):hover { border-color: var(--accent); }
+
+  .preview-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 4px 0 10px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  /* On-screen preview rendered exactly like the export */
+  #previewBox {
+    background: var(--slack-bg);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: auto; }
+
+  .hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
+  a { color: #4ea1e8; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Slack “Deactivated” Image Generator</h1>
+    <p class="sub">Upload a photo, type a name, hit Generate. No sign-in, nothing saved — everything runs in your browser.</p>
+
+    <div class="card">
+      <div class="field">
+        <label for="nameInput">Name</label>
+        <input id="nameInput" type="text" placeholder="Ray Morenoff" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label>Photo</label>
+        <div class="drop" id="drop">
+          <div>Drag a photo here, or <strong>click to choose</strong></div>
+          <input id="fileInput" type="file" accept="image/*" />
+        </div>
+        <div class="thumb" id="thumb">
+          <img id="thumbImg" alt="" />
+          <span id="thumbName"></span>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="btn-primary" id="generateBtn" disabled>Generate</button>
+        <button class="btn-ghost" id="downloadBtn" disabled>Download PNG</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="preview-label">Preview</div>
+      <div id="previewBox">
+        <canvas id="canvas" width="1320" height="260"></canvas>
+      </div>
+      <p class="hint">The image matches Slack’s dark theme: background <code>#1a1d21</code>, muted name color <code>#ababad</code>, Lato bold, rounded avatar with an offline presence ring.</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Layout constants (logical px; canvas is rendered at 2x for crispness) ----
+  var SCALE = 2;
+  var BG = "#1a1d21";
+  var NAME_COLOR = "#ababad";
+
+  var PAD_X = 28;        // left padding
+  var AVATAR = 76;       // avatar square size
+  var AVATAR_RADIUS = 16;
+  var GAP = 28;          // space between avatar and text
+  var FONT_SIZE = 44;    // name font size
+  var RING_RADIUS = 11;  // presence ring radius
+  var RING_BORDER = 5;   // background "cutout" around the ring
+
+  var canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+
+  var nameInput = document.getElementById("nameInput");
+  var fileInput = document.getElementById("fileInput");
+  var drop = document.getElementById("drop");
+  var thumb = document.getElementById("thumb");
+  var thumbImg = document.getElementById("thumbImg");
+  var thumbName = document.getElementById("thumbName");
+  var generateBtn = document.getElementById("generateBtn");
+  var downloadBtn = document.getElementById("downloadBtn");
+
+  var userImage = null;   // loaded HTMLImageElement
+  var fontsReady = false;
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { fontsReady = true; render(); });
+  }
+
+  // ---- Helpers ----
+  function roundRectPath(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function updateButtons() {
+    var ready = !!nameInput.value.trim();
+    generateBtn.disabled = !ready;
+  }
+
+  function render() {
+    var name = nameInput.value.trim() || "Name";
+    var W = canvas.width / SCALE;
+    var H = canvas.height / SCALE;
+
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, W, H);
+
+    var avX = PAD_X;
+    var avY = Math.round((H - AVATAR) / 2);
+
+    // Avatar
+    ctx.save();
+    roundRectPath(ctx, avX, avY, AVATAR, AVATAR, AVATAR_RADIUS);
+    ctx.clip();
+    if (userImage) {
+      // cover-fit the image into the avatar square
+      var iw = userImage.naturalWidth, ih = userImage.naturalHeight;
+      var scale = Math.max(AVATAR / iw, AVATAR / ih);
+      var dw = iw * scale, dh = ih * scale;
+      var dx = avX + (AVATAR - dw) / 2;
+      var dy = avY + (AVATAR - dh) / 2;
+      ctx.drawImage(userImage, dx, dy, dw, dh);
+    } else {
+      ctx.fillStyle = "#3a3d42";
+      ctx.fillRect(avX, avY, AVATAR, AVATAR);
+      ctx.fillStyle = "#6a6d72";
+      ctx.font = "700 " + Math.round(AVATAR * 0.42) + "px Lato, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("?", avX + AVATAR / 2, avY + AVATAR / 2 + 1);
+    }
+    ctx.restore();
+
+    // Offline presence ring (hollow circle) at bottom-right of avatar
+    var ringCx = avX + AVATAR - 2;
+    var ringCy = avY + AVATAR - 2;
+    // background cutout so the ring sits in a notch like Slack
+    ctx.fillStyle = BG;
+    ctx.beginPath();
+    ctx.arc(ringCx, ringCy, RING_RADIUS + RING_BORDER, 0, Math.PI * 2);
+    ctx.fill();
+    // the ring itself
+    ctx.strokeStyle = NAME_COLOR;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ringCx, ringCy, RING_RADIUS - 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Name + (deactivated)
+    var textX = avX + AVATAR + GAP;
+    var textY = H / 2;
+    ctx.fillStyle = NAME_COLOR;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = "700 " + FONT_SIZE + "px Lato, -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(name + " (deactivated)", textX, textY + 2);
+  }
+
+  function loadFile(file) {
+    if (!file || !/^image\//.test(file.type)) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        userImage = img;
+        thumbImg.src = e.target.result;
+        thumbName.textContent = file.name;
+        thumb.style.display = "flex";
+        render();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ---- Events ----
+  nameInput.addEventListener("input", function () { updateButtons(); render(); });
+
+  drop.addEventListener("click", function () { fileInput.click(); });
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files && fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("drag"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("drag"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var dt = e.dataTransfer;
+    if (dt && dt.files && dt.files[0]) loadFile(dt.files[0]);
+  });
+
+  generateBtn.addEventListener("click", function () {
+    render();
+    downloadBtn.disabled = false;
+    downloadBtn.focus();
+  });
+
+  downloadBtn.addEventListener("click", function () {
+    var name = (nameInput.value.trim() || "user").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    var link = document.createElement("a");
+    link.download = name + "-deactivated.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  });
+
+  // Initial paint
+  updateButtons();
+  render();
+})();
+</script>
+</body>
+</html>
