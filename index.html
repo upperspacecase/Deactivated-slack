@@ -159,7 +159,7 @@
 <body>
   <div class="wrap">
     <h1>Slack “Deactivated” Image Generator</h1>
-    <p class="sub">Upload a photo, type a name, hit Generate. No sign-in, nothing saved — everything runs in your browser.</p>
+    <p class="sub">Upload a photo and type a name — the image builds itself. No sign-in, nothing saved; everything runs in your browser.</p>
 
     <div class="card">
       <div class="field">
@@ -179,10 +179,6 @@
         </div>
       </div>
 
-      <div class="row">
-        <button class="btn-primary" id="generateBtn" disabled>Generate</button>
-        <button class="btn-ghost" id="downloadBtn" disabled>Download PNG</button>
-      </div>
     </div>
 
     <div class="card">
@@ -190,7 +186,9 @@
       <div id="previewBox">
         <canvas id="canvas" width="1320" height="400"></canvas>
       </div>
-      <p class="hint">The image matches Slack’s dark theme: background <code>#1a1d21</code>, muted name color <code>#ababad</code>, Lato bold, rounded avatar with an offline presence ring.</p>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn-primary" id="downloadBtn">Download PNG</button>
+      </div>
     </div>
   </div>
 
@@ -220,7 +218,6 @@
   var thumb = document.getElementById("thumb");
   var thumbImg = document.getElementById("thumbImg");
   var thumbName = document.getElementById("thumbName");
-  var generateBtn = document.getElementById("generateBtn");
   var downloadBtn = document.getElementById("downloadBtn");
 
   var userImage = null;   // loaded HTMLImageElement
@@ -242,9 +239,18 @@
     c.closePath();
   }
 
-  function updateButtons() {
-    var ready = !!nameInput.value.trim();
-    generateBtn.disabled = !ready;
+  // Convert the avatar region to greyscale via pixel data so it works in
+  // every browser (canvas ctx.filter is unsupported on older iOS Safari).
+  function desaturateRegion(x, y, w, h) {
+    var rx = Math.round(x * SCALE), ry = Math.round(y * SCALE);
+    var rw = Math.round(w * SCALE), rh = Math.round(h * SCALE);
+    var imgData = ctx.getImageData(rx, ry, rw, rh);
+    var d = imgData.data;
+    for (var i = 0; i < d.length; i += 4) {
+      var g = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) * 0.92;
+      d[i] = d[i + 1] = d[i + 2] = g;
+    }
+    ctx.putImageData(imgData, rx, ry);
   }
 
   function render() {
@@ -273,13 +279,7 @@
       var dw = iw * scale, dh = ih * scale;
       var dx = avX + (AVATAR - dw) / 2;
       var dy = avY + (AVATAR - dh) / 2;
-      // Grey out the photo like a deactivated Slack avatar
-      ctx.filter = "grayscale(100%) brightness(0.92)";
       ctx.drawImage(userImage, dx, dy, dw, dh);
-      ctx.filter = "none";
-      // soft grey wash on top so it reads clearly as deactivated
-      ctx.fillStyle = "rgba(26,29,33,0.28)";
-      ctx.fillRect(avX, avY, AVATAR, AVATAR);
     } else {
       ctx.fillStyle = "#3a3d42";
       ctx.fillRect(avX, avY, AVATAR, AVATAR);
@@ -290,6 +290,9 @@
       ctx.fillText("?", avX + AVATAR / 2, avY + AVATAR / 2 + 1);
     }
     ctx.restore();
+
+    // Grey out the photo like a deactivated Slack avatar
+    if (userImage) desaturateRegion(avX, avY, AVATAR, AVATAR);
 
     // Offline presence ring (hollow circle) at bottom-right of avatar
     var ringCx = avX + AVATAR - 2;
@@ -334,7 +337,7 @@
   }
 
   // ---- Events ----
-  nameInput.addEventListener("input", function () { updateButtons(); render(); });
+  nameInput.addEventListener("input", render);
 
   drop.addEventListener("click", function () { fileInput.click(); });
   fileInput.addEventListener("change", function () {
@@ -352,12 +355,6 @@
     if (dt && dt.files && dt.files[0]) loadFile(dt.files[0]);
   });
 
-  generateBtn.addEventListener("click", function () {
-    render();
-    downloadBtn.disabled = false;
-    downloadBtn.focus();
-  });
-
   downloadBtn.addEventListener("click", function () {
     var name = (nameInput.value.trim() || "user").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     var link = document.createElement("a");
@@ -367,7 +364,6 @@
   });
 
   // Initial paint
-  updateButtons();
   render();
 })();
 </script>
