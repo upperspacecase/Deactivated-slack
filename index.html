@@ -164,7 +164,7 @@
     <div class="card">
       <div class="field">
         <label for="nameInput">Name</label>
-        <input id="nameInput" type="text" placeholder="Ray Morenoff" autocomplete="off" />
+        <input id="nameInput" type="text" placeholder="your name here" autocomplete="off" />
       </div>
 
       <div class="field">
@@ -188,7 +188,7 @@
     <div class="card">
       <div class="preview-label">Preview</div>
       <div id="previewBox">
-        <canvas id="canvas" width="1320" height="260"></canvas>
+        <canvas id="canvas" width="1320" height="400"></canvas>
       </div>
       <p class="hint">The image matches Slack’s dark theme: background <code>#1a1d21</code>, muted name color <code>#ababad</code>, Lato bold, rounded avatar with an offline presence ring.</p>
     </div>
@@ -248,7 +248,7 @@
   }
 
   function render() {
-    var name = nameInput.value.trim() || "Name";
+    var name = nameInput.value.trim() || "your name here";
     var W = canvas.width / SCALE;
     var H = canvas.height / SCALE;
 
@@ -273,7 +273,13 @@
       var dw = iw * scale, dh = ih * scale;
       var dx = avX + (AVATAR - dw) / 2;
       var dy = avY + (AVATAR - dh) / 2;
+      // Grey out the photo like a deactivated Slack avatar
+      ctx.filter = "grayscale(100%) brightness(0.92)";
       ctx.drawImage(userImage, dx, dy, dw, dh);
+      ctx.filter = "none";
+      // soft grey wash on top so it reads clearly as deactivated
+      ctx.fillStyle = "rgba(26,29,33,0.28)";
+      ctx.fillRect(avX, avY, AVATAR, AVATAR);
     } else {
       ctx.fillStyle = "#3a3d42";
       ctx.fillRect(avX, avY, AVATAR, AVATAR);
