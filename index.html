@@ -103,19 +103,32 @@
   .drop strong { color: var(--text); }
   .drop input { display: none; }
 
-  .thumb {
-    margin-top: 12px;
-    display: none;
+  /* Crop / zoom viewport shown after a photo is chosen */
+  .cropArea { display: none; margin-top: 14px; }
+  #cropCanvas {
+    display: block;
+    width: 260px;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    border-radius: 14px;
+    background: var(--slack-bg);
+    cursor: grab;
+    touch-action: none;            /* let us handle pinch/drag ourselves */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #cropCanvas:active { cursor: grabbing; }
+  .cropControls {
+    display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 13px;
-    color: var(--text-dim);
+    margin: 12px 0 2px;
+    max-width: 260px;
   }
-  .thumb img {
-    width: 44px; height: 44px;
-    border-radius: 8px;
-    object-fit: cover;
-  }
+  .zoomLabel { font-size: 13px; font-weight: 700; color: var(--text-dim); }
+  #zoomSlider { flex: 1; accent-color: var(--accent); }
+  .btn-small { padding: 7px 12px; font-size: 13px; }
 
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -196,9 +209,14 @@
           <div>Drag a photo here, or <strong>click to choose</strong></div>
           <input id="fileInput" type="file" accept="image/*" />
         </div>
-        <div class="thumb" id="thumb">
-          <img id="thumbImg" alt="" />
-          <span id="thumbName"></span>
+        <div class="cropArea" id="cropArea">
+          <canvas id="cropCanvas" width="540" height="540"></canvas>
+          <div class="cropControls">
+            <span class="zoomLabel">Zoom</span>
+            <input type="range" id="zoomSlider" min="1" max="5" step="0.01" value="1" />
+            <button type="button" class="btn-ghost btn-small" id="changePhoto">Change</button>
+          </div>
+          <p class="hint">Pinch or use the slider to zoom, drag to move. The square is what shows on the tag.</p>
         </div>
       </div>
 
@@ -244,15 +262,22 @@
   var nameInput = document.getElementById("nameInput");
   var fileInput = document.getElementById("fileInput");
   var drop = document.getElementById("drop");
-  var thumb = document.getElementById("thumb");
-  var thumbImg = document.getElementById("thumbImg");
-  var thumbName = document.getElementById("thumbName");
+  var cropArea = document.getElementById("cropArea");
+  var cropCanvas = document.getElementById("cropCanvas");
+  var cropCtx = cropCanvas.getContext("2d");
+  var zoomSlider = document.getElementById("zoomSlider");
+  var changePhoto = document.getElementById("changePhoto");
   var generateBtn = document.getElementById("generateBtn");
   var resultCard = document.getElementById("resultCard");
   var resultImg = document.getElementById("resultImg");
 
   var userImage = null;   // loaded HTMLImageElement
   var fontsReady = false;
+
+  // Crop state, kept in ORIGINAL image pixels so it's display-independent.
+  // zoom 1 = "cover" (square fills with the shorter side); cx/cy = crop centre.
+  var MAX_ZOOM = 5;
+  var crop = { zoom: 1, cx: 0, cy: 0 };
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () { fontsReady = true; render(); });
@@ -268,6 +293,82 @@
     c.arcTo(x, y + h, x, y, r);
     c.arcTo(x, y, x + w, y, r);
     c.closePath();
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // The source square (in original image px) currently selected by the crop.
+  function sourceRect() {
+    var iw = userImage.naturalWidth, ih = userImage.naturalHeight;
+    var minDim = Math.min(iw, ih);
+    var size = minDim / crop.zoom;
+    var half = size / 2;
+    var cx = clamp(crop.cx, half, iw - half);
+    var cy = clamp(crop.cy, half, ih - half);
+    return { x: cx - half, y: cy - half, size: size };
+  }
+
+  // Keep the stored centre inside valid bounds for the current zoom.
+  function clampCrop() {
+    if (!userImage) return;
+    var iw = userImage.naturalWidth, ih = userImage.naturalHeight;
+    var half = (Math.min(iw, ih) / crop.zoom) / 2;
+    crop.cx = clamp(crop.cx, half, iw - half);
+    crop.cy = clamp(crop.cy, half, ih - half);
+  }
+
+  // Draw the crop preview (in colour so the photo is easy to frame).
+  function cropRender() {
+    var W = cropCanvas.width, H = cropCanvas.height;
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.clearRect(0, 0, W, H);
+    cropCtx.fillStyle = BG;
+    cropCtx.fillRect(0, 0, W, H);
+    if (!userImage) return;
+    var s = sourceRect();
+    cropCtx.save();
+    roundRectPath(cropCtx, 0, 0, W, H, W * (AVATAR_RADIUS / AVATAR));
+    cropCtx.clip();
+    cropCtx.drawImage(userImage, s.x, s.y, s.size, s.size, 0, 0, W, H);
+    cropCtx.restore();
+  }
+
+  // Move the crop by a screen-pixel delta (drag/pan).
+  function panBy(ddx, ddy) {
+    var V = cropCanvas.getBoundingClientRect().width || 1;
+    var size = sourceRect().size;
+    crop.cx -= ddx * (size / V);
+    crop.cy -= ddy * (size / V);
+    clampCrop();
+    cropRender();
+  }
+
+  // Set zoom, keeping the image point under (focalX, focalY) fixed.
+  // Focal coords are screen px relative to the canvas; default = centre.
+  function setZoom(newZoom, focalX, focalY) {
+    var rect = cropCanvas.getBoundingClientRect();
+    var V = rect.width || 1;
+    if (focalX == null) { focalX = V / 2; focalY = V / 2; }
+    var fxFrac = focalX / V, fyFrac = focalY / V;
+    var before = sourceRect();
+    var imgX = before.x + fxFrac * before.size;
+    var imgY = before.y + fyFrac * before.size;
+
+    crop.zoom = clamp(newZoom, 1, MAX_ZOOM);
+
+    var iw = userImage.naturalWidth, ih = userImage.naturalHeight;
+    var sizeAfter = Math.min(iw, ih) / crop.zoom;
+    crop.cx = imgX + (0.5 - fxFrac) * sizeAfter;
+    crop.cy = imgY + (0.5 - fyFrac) * sizeAfter;
+    clampCrop();
+    cropRender();
+    if (zoomSlider.value != crop.zoom) zoomSlider.value = crop.zoom;
+  }
+
+  // Convert event coords to canvas-relative screen px.
+  function localPoint(clientX, clientY) {
+    var rect = cropCanvas.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
   }
 
   // Convert the avatar region to greyscale via pixel data so it works in
@@ -304,13 +405,9 @@
     roundRectPath(ctx, avX, avY, AVATAR, AVATAR, AVATAR_RADIUS);
     ctx.clip();
     if (userImage) {
-      // cover-fit the image into the avatar square
-      var iw = userImage.naturalWidth, ih = userImage.naturalHeight;
-      var scale = Math.max(AVATAR / iw, AVATAR / ih);
-      var dw = iw * scale, dh = ih * scale;
-      var dx = avX + (AVATAR - dw) / 2;
-      var dy = avY + (AVATAR - dh) / 2;
-      ctx.drawImage(userImage, dx, dy, dw, dh);
+      // draw the user-chosen crop square into the avatar
+      var s = sourceRect();
+      ctx.drawImage(userImage, s.x, s.y, s.size, s.size, avX, avY, AVATAR, AVATAR);
     } else {
       ctx.fillStyle = "#3a3d42";
       ctx.fillRect(avX, avY, AVATAR, AVATAR);
@@ -357,10 +454,12 @@
       var img = new Image();
       img.onload = function () {
         userImage = img;
-        thumbImg.src = e.target.result;
-        thumbName.textContent = file.name;
-        thumb.style.display = "flex";
-        render();
+        crop.zoom = 1;
+        crop.cx = img.naturalWidth / 2;
+        crop.cy = img.naturalHeight / 2;
+        zoomSlider.value = 1;
+        cropArea.style.display = "block";
+        cropRender();
       };
       img.src = e.target.result;
     };
@@ -385,6 +484,83 @@
     var dt = e.dataTransfer;
     if (dt && dt.files && dt.files[0]) loadFile(dt.files[0]);
   });
+
+  changePhoto.addEventListener("click", function () { fileInput.click(); });
+
+  zoomSlider.addEventListener("input", function () {
+    if (userImage) setZoom(parseFloat(zoomSlider.value));
+  });
+
+  // ---- Crop gestures: drag to pan, pinch to zoom (touch), drag + wheel (mouse) ----
+  var dragging = false, lastX = 0, lastY = 0;
+  var pinching = false, lastDist = 0, pinchFocal = null;
+
+  function touchDist(t1, t2) {
+    var dx = t1.clientX - t2.clientX, dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function touchMid(t1, t2) {
+    return localPoint((t1.clientX + t2.clientX) / 2, (t1.clientY + t2.clientY) / 2);
+  }
+
+  cropCanvas.addEventListener("touchstart", function (e) {
+    if (!userImage) return;
+    if (e.touches.length === 2) {
+      pinching = true; dragging = false;
+      lastDist = touchDist(e.touches[0], e.touches[1]);
+      pinchFocal = touchMid(e.touches[0], e.touches[1]);
+    } else if (e.touches.length === 1) {
+      dragging = true; pinching = false;
+      lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  cropCanvas.addEventListener("touchmove", function (e) {
+    if (!userImage) return;
+    if (pinching && e.touches.length === 2) {
+      var d = touchDist(e.touches[0], e.touches[1]);
+      var mid = touchMid(e.touches[0], e.touches[1]);
+      if (lastDist > 0) setZoom(crop.zoom * (d / lastDist), mid.x, mid.y);
+      lastDist = d; pinchFocal = mid;
+    } else if (dragging && e.touches.length === 1) {
+      var t = e.touches[0];
+      panBy(t.clientX - lastX, t.clientY - lastY);
+      lastX = t.clientX; lastY = t.clientY;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  function endTouch(e) {
+    if (e.touches.length === 0) { dragging = false; pinching = false; }
+    else if (e.touches.length === 1) {
+      pinching = false; dragging = true;
+      lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    }
+  }
+  cropCanvas.addEventListener("touchend", endTouch);
+  cropCanvas.addEventListener("touchcancel", endTouch);
+
+  // Mouse drag
+  cropCanvas.addEventListener("mousedown", function (e) {
+    if (!userImage) return;
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    panBy(e.clientX - lastX, e.clientY - lastY);
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  window.addEventListener("mouseup", function () { dragging = false; });
+
+  // Mouse wheel / trackpad zoom
+  cropCanvas.addEventListener("wheel", function (e) {
+    if (!userImage) return;
+    var p = localPoint(e.clientX, e.clientY);
+    setZoom(crop.zoom * Math.exp(-e.deltaY * 0.0015), p.x, p.y);
+    e.preventDefault();
+  }, { passive: false });
 
   // Bake the canvas into a real <img> so it can be long-pressed and saved
   // to Photos on iPhone (a <canvas> can't be saved that way).
