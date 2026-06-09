@@ -145,12 +145,13 @@
   }
 
   /* On-screen preview rendered exactly like the export */
-  #previewBox {
+  .previewBox {
     background: var(--slack-bg);
     border-radius: 10px;
     overflow: hidden;
   }
-  canvas { display: block; width: 100%; height: auto; }
+  .previewBox canvas,
+  .previewBox img { display: block; width: 100%; height: auto; }
 
   .hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
   a { color: #4ea1e8; }
@@ -159,7 +160,7 @@
 <body>
   <div class="wrap">
     <h1>🎉 Deactivated Party Name Tag Generator 🎉</h1>
-    <p class="sub">Upload a photo and type a name — the image builds itself. No sign-in, nothing saved; everything runs in your browser.</p>
+    <p class="sub">Upload a photo, type a name, then tap <strong>Generate image</strong> and long-press to save. No sign-in, nothing saved; everything runs in your browser.</p>
 
     <div class="card">
       <div class="field">
@@ -183,13 +184,20 @@
 
     <div class="card">
       <div class="preview-label">Preview</div>
-      <div id="previewBox">
+      <div class="previewBox">
         <canvas id="canvas" width="1320" height="400"></canvas>
       </div>
       <div class="row" style="margin-top:16px;">
-        <button class="btn-primary" id="downloadBtn">Save image</button>
+        <button class="btn-primary" id="generateBtn">Generate image</button>
       </div>
-      <p class="hint">On iPhone this opens the share sheet — tap <strong>Save Image</strong> to add it to Photos. You can also long-press the preview above and choose <strong>Save to Photos</strong>.</p>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <div class="preview-label">Your image</div>
+      <div class="previewBox">
+        <img id="resultImg" alt="Generated deactivated name tag" />
+      </div>
+      <p class="hint"><strong>On iPhone:</strong> long-press the image above and tap <strong>Save to Photos</strong>. &nbsp;<strong>On a computer:</strong> right-click and choose <strong>Save image as…</strong></p>
     </div>
   </div>
 
@@ -219,7 +227,9 @@
   var thumb = document.getElementById("thumb");
   var thumbImg = document.getElementById("thumbImg");
   var thumbName = document.getElementById("thumbName");
-  var downloadBtn = document.getElementById("downloadBtn");
+  var generateBtn = document.getElementById("generateBtn");
+  var resultCard = document.getElementById("resultCard");
+  var resultImg = document.getElementById("resultImg");
 
   var userImage = null;   // loaded HTMLImageElement
   var fontsReady = false;
@@ -356,36 +366,13 @@
     if (dt && dt.files && dt.files[0]) loadFile(dt.files[0]);
   });
 
-  function fileBaseName() {
-    return (nameInput.value.trim() || "user").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-  }
-
-  // Plain-download fallback (desktop, and browsers without share support)
-  function downloadPng() {
-    var link = document.createElement("a");
-    link.download = fileBaseName() + "-deactivated.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  }
-
-  downloadBtn.addEventListener("click", function () {
-    var filename = fileBaseName() + "-deactivated.png";
-
-    // On iPhone/iPad the share sheet is the only reliable path to Photos.
-    if (canvas.toBlob && navigator.canShare) {
-      canvas.toBlob(function (blob) {
-        if (!blob) { downloadPng(); return; }
-        var file = new File([blob], filename, { type: "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: filename })
-            .catch(function () { /* user cancelled — do nothing */ });
-        } else {
-          downloadPng();
-        }
-      }, "image/png");
-    } else {
-      downloadPng();
-    }
+  // Bake the canvas into a real <img> so it can be long-pressed and saved
+  // to Photos on iPhone (a <canvas> can't be saved that way).
+  generateBtn.addEventListener("click", function () {
+    render();
+    resultImg.src = canvas.toDataURL("image/png");
+    resultCard.style.display = "block";
+    resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   // Initial paint
