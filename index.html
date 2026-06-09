@@ -154,6 +154,22 @@
   .previewBox img { display: block; width: 100%; height: auto; }
 
   .hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; line-height: 1.5; }
+
+  /* Big, obvious save instructions shown right above the result image */
+  .instructions {
+    background: rgba(18,100,163,0.14);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .instructions-step {
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .instructions-step + .instructions-step { margin-top: 10px; }
+  .instructions-step strong { color: #fff; }
   a { color: #4ea1e8; }
 </style>
 </head>
@@ -180,24 +196,22 @@
         </div>
       </div>
 
-    </div>
-
-    <div class="card">
-      <div class="preview-label">Preview</div>
-      <div class="previewBox">
-        <canvas id="canvas" width="1320" height="400"></canvas>
-      </div>
-      <div class="row" style="margin-top:16px;">
+      <div class="row" style="margin-top:4px;">
         <button class="btn-primary" id="generateBtn">Generate image</button>
       </div>
     </div>
 
+    <!-- Hidden rendering surface; the visible result is the <img> below -->
+    <canvas id="canvas" width="1320" height="400" style="display:none;"></canvas>
+
     <div class="card" id="resultCard" style="display:none;">
-      <div class="preview-label">Your image</div>
+      <div class="instructions">
+        <div class="instructions-step">📲 <strong>To save on your phone:</strong> press and hold the image below, then tap <strong>“Save to Photos.”</strong></div>
+        <div class="instructions-step">💻 <strong>On a computer:</strong> right-click the image and choose <strong>“Save image as…”</strong></div>
+      </div>
       <div class="previewBox">
         <img id="resultImg" alt="Generated deactivated name tag" />
       </div>
-      <p class="hint"><strong>On iPhone:</strong> long-press the image above and tap <strong>Save to Photos</strong>. &nbsp;<strong>On a computer:</strong> right-click and choose <strong>Save image as…</strong></p>
     </div>
   </div>
 
